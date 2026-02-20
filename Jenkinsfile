@@ -70,7 +70,7 @@ pipeline {
                     while (retryCount < maxRetries && !healthy) {
                         // Wait ~3 seconds
                         bat 'ping 127.0.0.1 -n 4 > nul'
-                        def result = bat(script: "curl -s -o nul http://localhost:${PORT}", returnStatus: true)
+                        def result = bat(script: "curl -s -o nul http://localhost:${CONTAINER_PORT}", returnStatus: true)
                         if (result == 0) {
                             healthy = true
                             echo "✅ App is responding!"
@@ -97,7 +97,7 @@ pipeline {
 
     post {
         success {
-            echo "✅ App successfully deployed on port ${PORT}"
+            echo "✅ App successfully deployed on port ${HOST_PORT}!"
         }
         failure {
             echo "❌ Build or deployment failed"

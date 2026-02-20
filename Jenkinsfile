@@ -1,7 +1,6 @@
 pipeline {
     agent any
 
-
     environment {
         IMAGE_NAME = "skilltern-backend"
         CONTAINER_NAME = "skilltern-backend-container"
@@ -30,40 +29,59 @@ pipeline {
             }
         }
 
-       stage('Stop Old Container (if any)') {
-    steps {
-        script {
-            echo "🛑 Stopping old container ${CONTAINER_NAME} if exists..."
-            bat """
-            docker stop ${CONTAINER_NAME} || echo "No existing container to stop"
-            docker rm ${CONTAINER_NAME} || echo "No existing container to remove"
-            exit /b 0
-            """
+        stage('Stop Old Container (if any)') {
+            steps {
+                script {
+                    echo "🛑 Stopping old container ${CONTAINER_NAME} if exists..."
+                    bat """
+                    docker stop ${CONTAINER_NAME} || echo No existing container to stop
+                    docker rm ${CONTAINER_NAME} || echo No existing container to remove
+                    exit /b 0
+                    """
+                }
+            }
         }
-    }
-}
 
         stage('Run Container') {
             steps {
                 script {
                     echo "🚀 Running new container ${CONTAINER_NAME}..."
                     bat """
-                    docker run -d \
-                    --name ${CONTAINER_NAME} \
-                    --env-file ${ENV_FILE} \
-                    -p ${PORT}:${PORT} \
+                    docker run -d ^
+                    --name ${CONTAINER_NAME} ^
+                    --env-file ${ENV_FILE} ^
+                    -p ${PORT}:${PORT} ^
                     ${IMAGE_NAME}
                     """
                 }
             }
         }
+
         stage('Health Check') {
             steps {
-                echo "❤️ Checking app health"
-                bat """
-                timeout /t 10
-                curl http://localhost:${PORT} || exit 1
-                """
+                echo "❤️ Checking app health..."
+                script {
+                    def maxRetries = 10
+                    def retryCount = 0
+                    def healthy = false
+
+                    while (retryCount < maxRetries && !healthy) {
+                        // Wait ~3 seconds
+                        bat 'ping 127.0.0.1 -n 4 > nul'
+                        def result = bat(script: "curl -s -o nul http://localhost:${PORT}", returnStatus: true)
+                        if (result == 0) {
+                            healthy = true
+                            echo "✅ App is responding!"
+                        } else {
+                            retryCount++
+                            echo "⚠️ App not ready yet, retry ${retryCount}/${maxRetries}..."
+                        }
+                    }
+
+                    if (!healthy) {
+                        error "❌ App did not respond after ${maxRetries * 3} seconds"
+                    }
+                }
             }
         }
 

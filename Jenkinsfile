@@ -17,7 +17,7 @@ pipeline {
         stage('Checkout Code') {
             steps {
                 echo "🔄 Checking out branch ${params.BRANCH_NAME}..."
-                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/anasparacha85/Skillternabackend.git'
+                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/anasparacha85/skilltern-backend.git'
             }
         }
 

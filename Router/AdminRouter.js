@@ -4,7 +4,7 @@ import passport from 'passport';
 import RoleAccess from '../Middleware/RoleMiddleware.js';
 
 const adminRouter = express.Router();
-
+// Admin Routes
 adminRouter.route('/ViewJobApplication')
   .get(passport.authenticate('jwt', { session: false }), RoleAccess('Admin'), AdminController.ViewJobApplications);
 

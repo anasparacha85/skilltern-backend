@@ -30,17 +30,18 @@ pipeline {
             }
         }
 
-        stage('Stop Old Container (if any)') {
-            steps {
-                script {
-                    echo "🛑 Stopping old container ${CONTAINER_NAME} if exists..."
-                    bat """
-                    docker stop ${CONTAINER_NAME} || echo "No existing container to stop"
-                    docker rm ${CONTAINER_NAME} || echo "No existing container to remove"
-                    """
-                }
-            }
+       stage('Stop Old Container (if any)') {
+    steps {
+        script {
+            echo "🛑 Stopping old container ${CONTAINER_NAME} if exists..."
+            bat """
+            docker stop ${CONTAINER_NAME} || echo "No existing container to stop"
+            docker rm ${CONTAINER_NAME} || echo "No existing container to remove"
+            exit /b 0
+            """
         }
+    }
+}
 
         stage('Run Container') {
             steps {

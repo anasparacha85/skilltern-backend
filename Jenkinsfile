@@ -5,7 +5,7 @@ pipeline {
     environment {
         IMAGE_NAME = "skilltern-backend"
         CONTAINER_NAME = "skilltern-backend-container"
-        PORT = "5000"
+        PORT = "5001"
         ENV_FILE = ".env"
     }
     parameters {

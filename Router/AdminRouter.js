@@ -5,7 +5,7 @@ import RoleAccess from '../Middleware/RoleMiddleware.js';
 
 const adminRouter = express.Router();
 
-adminRouter.route('/ViewJobApplications')
+adminRouter.route('/ViewJobApplication')
   .get(passport.authenticate('jwt', { session: false }), RoleAccess('Admin'), AdminController.ViewJobApplications);
 
 adminRouter.route('/delete-a-job/:id')

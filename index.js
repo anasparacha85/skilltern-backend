@@ -30,7 +30,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const server = express();
 
 
-// Stripe webhook
+// Stripe webhook//
 server.post(
   "/api/stripe/webhook",
   bodyParser.raw({ type: "application/json" }),

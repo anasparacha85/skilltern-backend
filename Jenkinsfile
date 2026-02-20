@@ -1,12 +1,14 @@
 pipeline {
     agent any
 
-    environment {
+   environment {
         IMAGE_NAME = "skilltern-backend"
         CONTAINER_NAME = "skilltern-backend-container"
-        PORT = "5001"
+        HOST_PORT = "5003"        // host machine port
+        CONTAINER_PORT = "5000"   // container port (backend env port)
         ENV_FILE = ".env"
     }
+
     parameters {
         string(name: 'BRANCH_NAME', defaultValue: 'main', description: 'Branch to build from')
     }
@@ -50,7 +52,7 @@ pipeline {
                     docker run -d ^
                     --name ${CONTAINER_NAME} ^
                     --env-file ${ENV_FILE} ^
-                    -p ${PORT}:${PORT} ^
+                    -p ${HOST_PORT}:${CONTAINER_PORT} ^
                     ${IMAGE_NAME}
                     """
                 }

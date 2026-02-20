@@ -4,10 +4,10 @@ pipeline {
    environment {
         IMAGE_NAME = "skilltern-backend"
         CONTAINER_NAME = "skilltern-backend-container"
-        HOST_PORT = "5003"        // host machine port
-        CONTAINER_PORT = "5000"   // container port (backend env port)
+        HOST_PORT = "5000"        // host machine port
+        CONTAINER_PORT = "5001"   // container port (backend env port)
         ENV_FILE = ".env"
-    }
+    
 
     parameters {
         string(name: 'BRANCH_NAME', defaultValue: 'main', description: 'Branch to build from')

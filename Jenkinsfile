@@ -1,20 +1,19 @@
 pipeline {
     agent any
 
-   environment {
+    environment {
         IMAGE_NAME = "skilltern-backend"
         CONTAINER_NAME = "skilltern-backend-container"
-        HOST_PORT = "5000"        // host machine port
-        CONTAINER_PORT = "5001"   // container port (backend env port)
+        HOST_PORT = "5000"
+        CONTAINER_PORT = "5001"
         ENV_FILE = ".env"
-    
+    }
 
     parameters {
         string(name: 'BRANCH_NAME', defaultValue: 'main', description: 'Branch to build from')
     }
 
     stages {
-
         stage('Checkout Code') {
             steps {
                 echo "🔄 Checking out branch ${params.BRANCH_NAME}..."
@@ -34,11 +33,10 @@ pipeline {
         stage('Stop Old Container (if any)') {
             steps {
                 script {
-                    echo "🛑 Stopping old container ${CONTAINER_NAME} if exists..."
+                    echo "🛑 Stopping old container ${CONTAINER_NAME}..."
                     bat """
                     docker stop ${CONTAINER_NAME} || echo No existing container to stop
                     docker rm ${CONTAINER_NAME} || echo No existing container to remove
-                    exit /b 0
                     """
                 }
             }
@@ -68,9 +66,8 @@ pipeline {
                     def healthy = false
 
                     while (retryCount < maxRetries && !healthy) {
-                        // Wait ~3 seconds
                         bat 'ping 127.0.0.1 -n 4 > nul'
-                        def result = bat(script: "curl -s -o nul http://localhost:${CONTAINER_PORT}", returnStatus: true)
+                        def result = bat(script: "curl -s -o nul http://localhost:${HOST_PORT}", returnStatus: true)
                         if (result == 0) {
                             healthy = true
                             echo "✅ App is responding!"
@@ -95,13 +92,12 @@ pipeline {
         }
     }
 
-   post {
-    success {
-        echo "✅ App successfully deployed on port ${PORT}"
+    post {
+        success {
+            echo "✅ App successfully deployed on port ${HOST_PORT}!"
+        }
+        failure {
+            echo "❌ Build or deployment failed"
+        }
     }
-    failure {
-        echo "❌ Build or deployment failed"
-    }
-}  // ✅ this closing brace was missing
-    }
-}
+} // <-- final closing brace

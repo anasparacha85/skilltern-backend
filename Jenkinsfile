@@ -95,12 +95,13 @@ pipeline {
         }
     }
 
-    post {
-        success {
-            echo "✅ App successfully deployed on port ${HOST_PORT}!"
-        }
-        failure {
-            echo "❌ Build or deployment failed"
-        }
+   post {
+    success {
+        echo "✅ App successfully deployed on port ${PORT}"
+    }
+    failure {
+        echo "❌ Build or deployment failed"
+    }
+}  // ✅ this closing brace was missing
     }
 }

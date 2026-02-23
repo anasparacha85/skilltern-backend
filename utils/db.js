@@ -9,7 +9,7 @@ const url = process.env.MONGODB_URL;
 const connectdb = async () => {
   try {
     await mongoose.connect(url);
-    console.log('Database connected successfully');
+    console.log('Database has been successfully connected to the server');
   } catch (error) {
     console.error('Database connection failed:', error);
   }

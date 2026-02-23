@@ -42,7 +42,7 @@ pipeline {
                     echo "🛑 Checking & stopping old container ${CONTAINER_NAME}..."
 
                     bat """
-                    docker ps -a --format "{{.Names}}" | findstr /R "^${CONTAINER_NAME}\\$" > nul
+                    docker inspect ${CONTAINER_NAME} > nul 2>&1
                     if %ERRORLEVEL%==0 (
                         echo Container exists. Stopping...
                         docker stop ${CONTAINER_NAME}

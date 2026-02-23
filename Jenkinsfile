@@ -2,22 +2,28 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = "skilltern-backend"
+        IMAGE_NAME     = "skilltern-backend"
         CONTAINER_NAME = "skilltern-backend-container"
-        HOST_PORT = "5000"
+        HOST_PORT      = "5000"
         CONTAINER_PORT = "5001"
-        ENV_FILE = ".env"
+        ENV_FILE       = ".env"
     }
 
     parameters {
-        string(name: 'BRANCH_NAME', defaultValue: 'main', description: 'Branch to build from')
+        string(
+            name: 'BRANCH_NAME',
+            defaultValue: 'main',
+            description: 'Branch to build from'
+        )
     }
 
     stages {
+
         stage('Checkout Code') {
             steps {
                 echo "🔄 Checking out branch ${params.BRANCH_NAME}..."
-                git branch: "${params.BRANCH_NAME}", url: 'https://github.com/anasparacha85/skilltern-backend.git'
+                git branch: "${params.BRANCH_NAME}",
+                    url: 'https://github.com/anasparacha85/skilltern-backend.git'
             }
         }
 
@@ -36,7 +42,7 @@ pipeline {
                     echo "🛑 Checking & stopping old container ${CONTAINER_NAME}..."
 
                     bat """
-                    docker ps -a --format "{{.Names}}" | findstr /R "^${CONTAINER_NAME}$" > nul
+                    docker ps -a --format "{{.Names}}" | findstr /R "^${CONTAINER_NAME}\\$" > nul
                     if %ERRORLEVEL%==0 (
                         echo Container exists. Stopping...
                         docker stop ${CONTAINER_NAME}
@@ -46,13 +52,14 @@ pipeline {
                     )
                     """
                 }
-        }
+            }
         }
 
         stage('Run Container') {
             steps {
                 script {
                     echo "🚀 Running new container ${CONTAINER_NAME}..."
+
                     bat """
                     docker run -d ^
                     --name ${CONTAINER_NAME} ^
@@ -66,15 +73,20 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                echo "❤️ Checking app health..."
                 script {
+                    echo "❤️ Checking app health..."
+
                     def maxRetries = 10
                     def retryCount = 0
                     def healthy = false
 
                     while (retryCount < maxRetries && !healthy) {
                         bat 'ping 127.0.0.1 -n 4 > nul'
-                        def result = bat(script: "curl -s -o nul http://localhost:${HOST_PORT}", returnStatus: true)
+                        def result = bat(
+                            script: "curl -s -o nul http://localhost:${HOST_PORT}",
+                            returnStatus: true
+                        )
+
                         if (result == 0) {
                             healthy = true
                             echo "✅ App is responding!"
@@ -107,4 +119,4 @@ pipeline {
             echo "❌ Build or deployment failed"
         }
     }
-} // <-- final closing brace
+}

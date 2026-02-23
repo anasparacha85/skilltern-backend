@@ -24,10 +24,10 @@ COPY . .
 RUN mkdir -p uploads
 
 # 7️⃣ Expose port
-EXPOSE 5001
+EXPOSE 5003
 
 # 8️⃣ Healthcheck
-HEALTHCHECK --interval=30s CMD node -e "require('http').get('http://localhost:5001')"
+HEALTHCHECK --interval=30s CMD node -e "require('http').get('http://localhost:5003')"
 
 # 9️⃣ Start the app
 CMD ["npm", "start"]

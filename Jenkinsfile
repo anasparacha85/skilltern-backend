@@ -31,16 +31,23 @@ pipeline {
         }
 
         stage('Stop Old Container (if any)') {
-            steps {
-                script {
-                    echo "🛑 Stopping old container ${CONTAINER_NAME}..."
-                    bat """
-                    docker stop ${CONTAINER_NAME} || echo No existing container to stop
-                    docker rm ${CONTAINER_NAME} || echo No existing container to remove
-                    """
-                }
-            }
+    steps {
+        script {
+            echo "🛑 Checking & stopping old container ${CONTAINER_NAME}..."
+
+            bat """
+            docker ps -a --format "{{.Names}}" | findstr /R "^${CONTAINER_NAME}$" > nul
+            if %ERRORLEVEL%==0 (
+                echo Container exists. Stopping...
+                docker stop ${CONTAINER_NAME}
+                docker rm ${CONTAINER_NAME}
+            ) else (
+                echo No existing container found.
+            )
+            """
         }
+    }
+}
 
         stage('Run Container') {
             steps {

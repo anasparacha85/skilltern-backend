@@ -64,36 +64,54 @@ pipeline {
                 script {
                     echo "🚀 Running new container ${CONTAINER_NAME}..."
 
-                    // First check if port is already in use
-                    def portCheck = bat(
-                        script: "netstat -ano | findstr :${HOST_PORT}",
+                    // First check if port is already in use - using PowerShell instead of batch for complex operations
+                    def portInUse = powershell(
+                        script: """
+                        \$portInUse = netstat -ano | Select-String ":${HOST_PORT} "
+                        if (\$portInUse) {
+                            Write-Host "Port ${HOST_PORT} is in use"
+                            \$processIds = \$portInUse | ForEach-Object { \$_ -split ' ' | Select-Object -Last 1 }
+                            \$processIds | ForEach-Object {
+                                try {
+                                    Stop-Process -Id \$_ -Force -ErrorAction SilentlyContinue
+                                    Write-Host "Killed process with PID: \$_"
+                                } catch {
+                                    # Process might already be terminated
+                                }
+                            }
+                            Write-Host "Port ${HOST_PORT} freed successfully"
+                            exit 0
+                        } else {
+                            Write-Host "Port ${HOST_PORT} is free"
+                            exit 0
+                        }
+                        """,
                         returnStatus: true
                     )
 
-                    if (portCheck == 0) {
-                        echo "⚠️ Port ${HOST_PORT} is already in use. Attempting to free it..."
-                        bat """
-                        for /f "tokens=5" %a in ('netstat -ano ^| findstr :${HOST_PORT}') do (
-                            taskkill /F /PID %a > nul 2>&1
+                    // Now run the container
+                    def runResult = bat(
+                        script: """
+                        docker run -d ^
+                        --name ${CONTAINER_NAME} ^
+                        --env-file ${ENV_FILE} ^
+                        -p ${HOST_PORT}:${CONTAINER_PORT} ^
+                        ${IMAGE_NAME}
+                        
+                        if %ERRORLEVEL% NEQ 0 (
+                            echo ❌ Failed to start container
+                            exit /b 1
+                        ) else (
+                            echo ✅ Container started successfully
+                            exit /b 0
                         )
-                        """
-                    }
-
-                    bat """
-                    docker run -d ^
-                    --name ${CONTAINER_NAME} ^
-                    --env-file ${ENV_FILE} ^
-                    -p ${HOST_PORT}:${CONTAINER_PORT} ^
-                    ${IMAGE_NAME}
-                    
-                    if %ERRORLEVEL% NEQ 0 (
-                        echo ❌ Failed to start container
-                        exit /b 1
-                    ) else (
-                        echo ✅ Container started successfully
-                        exit /b 0
+                        """,
+                        returnStatus: true
                     )
-                    """
+
+                    if (runResult != 0) {
+                        error "Failed to start container"
+                    }
                 }
             }
         }
@@ -108,15 +126,22 @@ pipeline {
                     def healthy = false
 
                     while (retryCount < maxRetries && !healthy) {
-                        bat 'timeout /t 3 /nobreak > nul'
+                        powershell 'Start-Sleep -Seconds 3'
                         
                         // Use PowerShell for better HTTP checking
                         def result = powershell(
                             script: """
                             try {
                                 \$response = Invoke-WebRequest -Uri http://localhost:${HOST_PORT} -TimeoutSec 2 -UseBasicParsing
-                                if (\$response.StatusCode -eq 200) { exit 0 } else { exit 1 }
+                                if (\$response.StatusCode -eq 200) { 
+                                    Write-Host "✅ Health check passed"
+                                    exit 0 
+                                } else { 
+                                    Write-Host "⚠️ Health check returned status: \$(\$response.StatusCode)"
+                                    exit 1 
+                                }
                             } catch {
+                                Write-Host "⚠️ Health check failed: \$(\$_.Exception.Message)"
                                 exit 1
                             }
                             """,
@@ -135,7 +160,7 @@ pipeline {
                     if (!healthy) {
                         echo "❌ App did not respond after ${maxRetries * 3} seconds"
                         echo "📋 Last container logs:"
-                        bat "docker logs ${CONTAINER_NAME} --tail 50"
+                        bat "docker logs ${CONTAINER_NAME} --tail 50 2>&1 || echo No logs available"
                         error "Health check failed"
                     }
                 }
@@ -145,7 +170,7 @@ pipeline {
         stage('Verify Logs') {
             steps {
                 echo "🔍 Checking container logs..."
-                bat "docker logs ${CONTAINER_NAME} --tail 50 || echo No logs available"
+                bat "docker logs ${CONTAINER_NAME} --tail 50 2>&1 || echo No logs available"
             }
         }
     }
@@ -161,10 +186,21 @@ pipeline {
                 
                 if (containerRunning) {
                     echo "✅ Container is still running"
+                    
+                    // Show container details
+                    bat "docker ps -f name=${CONTAINER_NAME}"
                 } else {
                     echo "⚠️ Container is not running"
-                    // Show last logs if container exists but not running
-                    bat "docker logs ${CONTAINER_NAME} --tail 20 2>&1 || echo Container logs not available"
+                    // Check if container exists but is stopped
+                    def containerExists = bat(
+                        script: "docker ps -a -q -f name=${CONTAINER_NAME}",
+                        returnStatus: true
+                    ) == 0
+                    
+                    if (containerExists) {
+                        echo "📋 Container exists but is stopped. Last logs:"
+                        bat "docker logs ${CONTAINER_NAME} --tail 20 2>&1 || echo Container logs not available"
+                    }
                 }
             }
         }
@@ -173,6 +209,13 @@ pipeline {
         }
         failure {
             echo "❌ Build or deployment failed"
+            
+            // Show debug information on failure
+            script {
+                echo "📋 Debug information:"
+                bat "docker ps -a || echo No containers found"
+                bat "docker images ${IMAGE_NAME} || echo No images found"
+            }
         }
     }
 }

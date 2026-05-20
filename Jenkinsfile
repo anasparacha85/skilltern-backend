@@ -4,9 +4,10 @@ pipeline {
     environment {
         IMAGE_NAME     = "skilltern-backend"
         CONTAINER_NAME = "skilltern-backend-container"
-        HOST_PORT      = "8081"
+        HOST_PORT      = "3001"
         CONTAINER_PORT = "5001"
-        ENV_FILE       = ".env"
+        AWS_REGION     = "us-east-1"
+        SECRET_NAME    = "skilltern/backend/env"
     }
 
     parameters {
@@ -21,40 +22,59 @@ pipeline {
 
         stage('Checkout Code') {
             steps {
-                echo "🔄 Checking out branch ${params.BRANCH_NAME}..."
+                echo "Checking out branch ${params.BRANCH_NAME}..."
                 git branch: "${params.BRANCH_NAME}",
+                    credentialsId: 'gitPat',
                     url: 'https://github.com/anasparacha85/skilltern-backend.git'
+            }
+        }
+
+        stage('Fetch Secrets from AWS') {
+            steps {
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id',     variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
+                    script {
+                        sh """
+                            aws secretsmanager get-secret-value \
+                                --region ${AWS_REGION} \
+                                --secret-id ${SECRET_NAME} \
+                                --query SecretString \
+                                --output text \
+                            | python3 -c "import json,sys; [print(k+'='+v) for k,v in json.load(sys.stdin).items()]" > .env
+
+                            chmod 600 .env
+                            echo "Secrets fetched successfully"
+                        """
+                    }
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 script {
-                    echo "📦 Building Docker image ${IMAGE_NAME}..."
-                    bat "docker build -t ${IMAGE_NAME} ."
+                    echo "Building Docker image ${IMAGE_NAME}..."
+                    sh "docker build -t ${IMAGE_NAME} ."
                 }
             }
         }
 
-        stage('Stop Old Container (if any)') {
+        stage('Stop Old Container') {
             steps {
                 script {
-                    echo "🛑 Checking & stopping old container ${CONTAINER_NAME}..."
-
-                    // Use a more robust approach with error handling
-                    def containerExists = bat(
-                        script: "docker inspect ${CONTAINER_NAME} > nul 2>&1",
-                        returnStatus: true
-                    ) == 0
-
-                    if (containerExists) {
-                        echo "Container exists. Stopping and removing..."
-                        bat "docker stop ${CONTAINER_NAME} || exit /b 0"
-                        bat "docker rm ${CONTAINER_NAME} || exit /b 0"
-                        echo "✅ Old container removed successfully"
-                    } else {
-                        echo "No existing container found. Continuing..."
-                    }
+                    echo "Checking & stopping old container ${CONTAINER_NAME}..."
+                    sh """
+                        if docker inspect ${CONTAINER_NAME} > /dev/null 2>&1; then
+                            echo "Container exists. Stopping and removing..."
+                            docker stop ${CONTAINER_NAME} || true
+                            docker rm ${CONTAINER_NAME} || true
+                            echo "Old container removed successfully"
+                        else
+                            echo "No existing container found. Continuing..."
+                        fi
+                    """
                 }
             }
         }
@@ -62,105 +82,52 @@ pipeline {
         stage('Run Container') {
             steps {
                 script {
-                    echo "🚀 Running new container ${CONTAINER_NAME}..."
-
-                    // First check if port is already in use - using PowerShell instead of batch for complex operations
-                    def portInUse = powershell(
-                        script: """
-                        \$portInUse = netstat -ano | Select-String ":${HOST_PORT} "
-                        if (\$portInUse) {
-                            Write-Host "Port ${HOST_PORT} is in use"
-                            \$processIds = \$portInUse | ForEach-Object { \$_ -split ' ' | Select-Object -Last 1 }
-                            \$processIds | ForEach-Object {
-                                try {
-                                    Stop-Process -Id \$_ -Force -ErrorAction SilentlyContinue
-                                    Write-Host "Killed process with PID: \$_"
-                                } catch {
-                                    # Process might already be terminated
-                                }
-                            }
-                            Write-Host "Port ${HOST_PORT} freed successfully"
-                            exit 0
-                        } else {
-                            Write-Host "Port ${HOST_PORT} is free"
-                            exit 0
-                        }
-                        """,
-                        returnStatus: true
-                    )
-
-                    // Now run the container
-                    def runResult = bat(
-                        script: """
-                        docker run -d ^
-                        --name ${CONTAINER_NAME} ^
-                        --env-file ${ENV_FILE} ^
-                        -p ${HOST_PORT}:${CONTAINER_PORT} ^
-                        ${IMAGE_NAME}
-                        
-                        if %ERRORLEVEL% NEQ 0 (
-                            echo ❌ Failed to start container
-                            exit /b 1
-                        ) else (
-                            echo ✅ Container started successfully
-                            exit /b 0
-                        )
-                        """,
-                        returnStatus: true
-                    )
-
-                    if (runResult != 0) {
-                        error "Failed to start container"
-                    }
+                    echo "Running new container ${CONTAINER_NAME}..."
+                    sh """
+                        docker run -d \
+                            --name ${CONTAINER_NAME} \
+                            --env-file .env \
+                            -p ${HOST_PORT}:${CONTAINER_PORT} \
+                            --restart unless-stopped \
+                            ${IMAGE_NAME}
+                    """
                 }
+            }
+        }
+
+        stage('Cleanup Secrets') {
+            steps {
+                sh "rm -f .env"
+                echo "Env file removed from workspace"
             }
         }
 
         stage('Health Check') {
             steps {
                 script {
-                    echo "❤️ Checking app health..."
-
+                    echo "Checking app health..."
                     def maxRetries = 10
                     def retryCount = 0
                     def healthy = false
 
                     while (retryCount < maxRetries && !healthy) {
-                        powershell 'Start-Sleep -Seconds 3'
-                        
-                        // Use PowerShell for better HTTP checking
-                        def result = powershell(
-                            script: """
-                            try {
-                                \$response = Invoke-WebRequest -Uri http://localhost:${HOST_PORT} -TimeoutSec 2 -UseBasicParsing
-                                if (\$response.StatusCode -eq 200) { 
-                                    Write-Host "✅ Health check passed"
-                                    exit 0 
-                                } else { 
-                                    Write-Host "⚠️ Health check returned status: \$(\$response.StatusCode)"
-                                    exit 1 
-                                }
-                            } catch {
-                                Write-Host "⚠️ Health check failed: \$(\$_.Exception.Message)"
-                                exit 1
-                            }
-                            """,
+                        sleep(3)
+                        def result = sh(
+                            script: "curl -sf http://localhost:${HOST_PORT} > /dev/null 2>&1",
                             returnStatus: true
                         )
-
                         if (result == 0) {
                             healthy = true
-                            echo "✅ App is responding!"
+                            echo "App is responding!"
                         } else {
                             retryCount++
-                            echo "⚠️ App not ready yet, retry ${retryCount}/${maxRetries}..."
+                            echo "App not ready yet, retry ${retryCount}/${maxRetries}..."
                         }
                     }
 
                     if (!healthy) {
-                        echo "❌ App did not respond after ${maxRetries * 3} seconds"
-                        echo "📋 Last container logs:"
-                        bat "docker logs ${CONTAINER_NAME} --tail 50 2>&1 || echo No logs available"
+                        echo "App did not respond after ${maxRetries * 3} seconds"
+                        sh "docker logs ${CONTAINER_NAME} --tail 50 || true"
                         error "Health check failed"
                     }
                 }
@@ -169,8 +136,8 @@ pipeline {
 
         stage('Verify Logs') {
             steps {
-                echo "🔍 Checking container logs..."
-                bat "docker logs ${CONTAINER_NAME} --tail 50 2>&1 || echo No logs available"
+                echo "Checking container logs..."
+                sh "docker logs ${CONTAINER_NAME} --tail 50 || true"
             }
         }
     }
@@ -178,43 +145,29 @@ pipeline {
     post {
         always {
             script {
-                // Check container status in post-build
-                def containerRunning = bat(
+                sh "rm -f .env || true"
+                def containerRunning = sh(
                     script: "docker ps -q -f name=${CONTAINER_NAME}",
                     returnStatus: true
                 ) == 0
-                
+
                 if (containerRunning) {
-                    echo "✅ Container is still running"
-                    
-                    // Show container details
-                    bat "docker ps -f name=${CONTAINER_NAME}"
+                    echo "Container is running"
+                    sh "docker ps -f name=${CONTAINER_NAME}"
                 } else {
-                    echo "⚠️ Container is not running"
-                    // Check if container exists but is stopped
-                    def containerExists = bat(
-                        script: "docker ps -a -q -f name=${CONTAINER_NAME}",
-                        returnStatus: true
-                    ) == 0
-                    
-                    if (containerExists) {
-                        echo "📋 Container exists but is stopped. Last logs:"
-                        bat "docker logs ${CONTAINER_NAME} --tail 20 2>&1 || echo Container logs not available"
-                    }
+                    echo "Container is not running"
+                    sh "docker logs ${CONTAINER_NAME} --tail 20 || true"
                 }
             }
         }
         success {
-            echo "✅ App successfully deployed on port ${HOST_PORT}!"
+            echo "App successfully deployed on port ${HOST_PORT}!"
         }
         failure {
-            echo "❌ Build or deployment failed"
-            
-            // Show debug information on failure
+            echo "Build or deployment failed"
             script {
-                echo "📋 Debug information:"
-                bat "docker ps -a || echo No containers found"
-                bat "docker images ${IMAGE_NAME} || echo No images found"
+                sh "docker ps -a || true"
+                sh "docker images ${IMAGE_NAME} || true"
             }
         }
     }

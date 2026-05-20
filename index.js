@@ -126,7 +126,7 @@ cron.schedule("0 0 * * *", () => {
 // });
 connectdb().then(()=>{
     server.listen(PORT,()=>{
-      console.log("server started");
+      console.log(`server started on port ${PORT} in ${process.env.NODE_ENV} mode`);
       
     })
 })

@@ -88,7 +88,7 @@ pipeline {
                     while (retryCount < maxRetries && !healthy) {
                         sleep(3)
                         def result = sh(
-                            script: "curl -sf http://localhost:${HOST_PORT} > /dev/null 2>&1",
+                            script: "curl -sf http://3.238.224.157:${HOST_PORT} > /dev/null 2>&1",
                             returnStatus: true
                         )
                         if (result == 0) {

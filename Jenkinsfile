@@ -6,7 +6,7 @@ pipeline {
         CONTAINER_NAME = "skilltern-backend-container"
         HOST_PORT      = "3001"
         CONTAINER_PORT = "5001"
-        AWS_REGION     = "us-east-1"
+        AWS_REGION     = "ap-southeast-1"
         SECRET_NAME    = "test-app/server/prod"
     }
 
@@ -26,29 +26,6 @@ pipeline {
                 git branch: "${params.BRANCH_NAME}",
                     credentialsId: 'gitPat',
                     url: 'https://github.com/anasparacha85/skilltern-backend.git'
-            }
-        }
-
-        stage('Fetch Secrets from AWS') {
-            steps {
-                withCredentials([
-                    string(credentialsId: 'aws-access-key-id',     variable: 'AWS_ACCESS_KEY_ID'),
-                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
-                ]) {
-                    script {
-                        sh """
-                            aws secretsmanager get-secret-value \
-                                --region ${AWS_REGION} \
-                                --secret-id ${SECRET_NAME} \
-                                --query SecretString \
-                                --output text \
-                            | python3 -c "import json,sys; [print(k+'='+v) for k,v in json.load(sys.stdin).items()]" > .env
-
-                            chmod 600 .env
-                            echo "Secrets fetched successfully"
-                        """
-                    }
-                }
             }
         }
 
@@ -81,24 +58,22 @@ pipeline {
 
         stage('Run Container') {
             steps {
-                script {
-                    echo "Running new container ${CONTAINER_NAME}..."
+                withCredentials([
+                    string(credentialsId: 'aws-access-key-id',     variable: 'AWS_ACCESS_KEY_ID'),
+                    string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')
+                ]) {
                     sh """
                         docker run -d \
                             --name ${CONTAINER_NAME} \
-                            --env-file .env \
+                            -e AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID} \
+                            -e AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY} \
+                            -e AWS_REGION=${AWS_REGION} \
+                            -e SECRET_NAME=${SECRET_NAME} \
                             -p ${HOST_PORT}:${CONTAINER_PORT} \
                             --restart unless-stopped \
                             ${IMAGE_NAME}
                     """
                 }
-            }
-        }
-
-        stage('Cleanup Secrets') {
-            steps {
-                sh "rm -f .env"
-                echo "Env file removed from workspace"
             }
         }
 
@@ -145,7 +120,6 @@ pipeline {
     post {
         always {
             script {
-                sh "rm -f .env || true"
                 def containerRunning = sh(
                     script: "docker ps -q -f name=${CONTAINER_NAME}",
                     returnStatus: true

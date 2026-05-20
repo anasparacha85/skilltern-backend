@@ -29,5 +29,5 @@ EXPOSE 5001
 # 8️⃣ Healthcheck
 HEALTHCHECK --interval=30s CMD node -e "require('http').get('http://localhost:5001')"
 
-# 9️⃣ Start the app
-CMD ["npm", "start"]
+# 9️⃣ Start the app via secrets fetcher
+CMD ["node", "fetch-secrets.mjs"]

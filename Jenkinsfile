@@ -7,7 +7,7 @@ pipeline {
         HOST_PORT      = "3001"
         CONTAINER_PORT = "5001"
         AWS_REGION     = "us-east-1"
-        SECRET_NAME    = "skilltern/backend/env"
+        SECRET_NAME    = "test-app/server/prod"
     }
 
     parameters {

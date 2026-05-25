@@ -10,6 +10,10 @@ pipeline {
         SECRET_NAME    = "test-app/server/prod"
     }
 
+    options {
+        lock(label: 'global')
+    }
+
     parameters {
         string(
             name: 'BRANCH_NAME',

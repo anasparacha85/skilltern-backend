@@ -4,7 +4,7 @@ import InstructorModal from "../Model/InstructorModal.js";
 import User from "../Model/UserModal.js";
 import transporter from "../Middleware/transporter.js";
 import EnrollmentModel from "../Model/EnrollmentModal.js";
-
+////////////////
 const ViewJobApplications = async (req, res) => {
   try {
     const FindData = await EmployeeModal.find();
